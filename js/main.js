@@ -1,13 +1,30 @@
 const IMG_URL = 'https://image.tmdb.org/t/p/w185_and_h278_bestv2';
-const API_KEY = 'da16d7185d5dd4192defd37bfaff4184';
 
 // Елементы
 const leftMenu = document.querySelector('.left-menu'),
 	hamburger = document.querySelector('.hamburger'),
 	tvShowsList = document.querySelector('.tv-shows__list'),
-	modal = document.querySelector('.modal');
+	modal = document.querySelector('.modal'),
+	tvShows = document.querySelector('.tv-shows'),
+	tvCardImg = document.querySelector('.tv-card__img'),
+	modalTitle = document.querySelector('.modal__title'),
+	genresList = document.querySelector('.genres-list'),
+	rating = document.querySelector('.rating'),
+	description = document.querySelector('.description'),
+	modalLink = document.querySelector('.modal__link'),
+	searchForm = document.querySelector('.search__form'),
+	searchFormInput = document.querySelector('.search__form-input');
+
+// Создаём прилоадер
+const loading = document.createElement('div');
+loading.className = 'loading';
 
 class DBService {
+	constructor() {
+		this.SERVER = 'https://api.themoviedb.org/3';
+		this.API_KEY = 'da16d7185d5dd4192defd37bfaff4184';
+	};
+
 	getData = async (url) => {
 		const res = await fetch(url);
 		if (res.ok) {
@@ -21,10 +38,17 @@ class DBService {
 	getTestData = () => {
 		return this.getData('test.json');
 	};
+
+	getTestCard = () => {
+		return this.getData('card.json');
+	};
+
+	getSearchResult = query => this.getData(`${this.SERVER}/search/tv?api_key=${this.API_KEY}&language=ru-RU&query=${query}`);
+
+	getTvShow = id => this.getData(`${this.SERVER}/tv/${id}?api_key=${this.API_KEY}&language=ru-RU`);
 };
 
 const renderCard = response => {
-	console.log(response);
 	tvShowsList.textContent = '';
 
 	response.results.forEach(item => {
@@ -33,32 +57,42 @@ const renderCard = response => {
 			name: title,
 			poster_path: poster,
 			vote_average: vote,
+			id,
 		} = item;
 
-		// Проверка на то, что если нет постера
+		// Проверка на то, что если нет постера, то мы ставим картинку - Ксожалению постер отсутствует
 		const posterIMG = poster ? IMG_URL + poster : 'img/no-poster.jpg';
-		const backdropIMG = ''; // дз если нет backdrop то то ничего не добавляем
-		const voteElem = ''; // если нет voteElem то не выводим span tv-card__vote
+		const backdropIMG = backdrop ? IMG_URL + backdrop : ''; // дз если нет backdrop то то ничего не добавляем
+		const voteElem = vote ? `<span class="tv-card__vote">${vote}</span>` : ''; // если нет voteElem то не выводим span tv-card__vote
 
 		const card = document.createElement('li');
 		card.className = 'tv-shows__item';
 		card.innerHTML = `
-			<a href="#" class="tv-card">
-				<span class="tv-card__vote">${vote}</span>
+			<a href="#" id="${id}" class="tv-card">
+				${voteElem}
 				<img class="tv-card__img"
 					src="${posterIMG}"
-					data-backdrop="${IMG_URL + backdrop}"
+					data-backdrop="${backdropIMG}"
 					alt="${title}">
 				<h4 class="tv-card__head">${title}</h4>
 			</a>
 		`;
 
+		loading.remove();
 		tvShowsList.append(card);
 	});
 };
 
-// Здесь мы создаём новый объект просто не даём ему никакого имени
-new DBService().getTestData().then(renderCard);
+searchForm.addEventListener('submit', event => {
+	event.preventDefault();
+	const value = searchFormInput.value.trim();
+	if (value) {
+		tvShows.append(loading);
+		// Здесь мы создаём новый объект просто не даём ему никакого имени
+		new DBService().getSearchResult(value).then(renderCard);
+	}
+	searchFormInput.value = '';
+});
 
 // Открытие закрытие меню
 hamburger.addEventListener('click', () => {
@@ -78,6 +112,8 @@ document.addEventListener('click', event => {
 });
 
 leftMenu.addEventListener('click', event => {
+	event.preventDefault();
+
 	const target = event.target;
 	const dropDown = target.closest('.dropdown');
 
@@ -98,8 +134,42 @@ tvShowsList.addEventListener('click', event => {
 	const card = target.closest('.tv-card');
 
 	if (card) {
-		document.body.style.overflow = 'hidden';
-		modal.classList.remove('hide');
+		// Создаём новый запрос
+		new DBService().getTvShow(card.id)
+			.then(({
+				poster_path: posterPath,
+				name: title, genres,
+				vote_average: voteAverage,
+				overview,
+				homepage}) => {
+				tvCardImg.src = IMG_URL + posterPath;
+				tvCardImg.alt = title;
+				modalTitle.textContent = title;
+				// Вариант перебора - 1
+				//genresList.innerHTML = data.genres.reduce((acc, item) => `${acc}<li>${item.name}</li>`, '');
+				// Очищаем
+				genresList.textContent = '';
+
+				// Вариант перебора - 2
+				// for (const item of data.genres) {
+				// 	genresList.innerHTML += `<li>${item.name}</li>`;
+				// };
+
+				// Вариант перебора - 3
+				genres.forEach(item => {
+					genresList.innerHTML += `<li>${item.name}</li>`
+				});
+				rating.textContent = voteAverage;
+				description.textContent = overview;
+				modalLink.href = homepage;
+			})
+			// Делаем асинхронную загрузку постера в pop up
+			.then(() => {
+				document.body.style.overflow = 'hidden';
+				modal.classList.remove('hide');
+			});
+
+		
 	};
 });
 
